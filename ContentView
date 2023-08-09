@@ -1,0 +1,76 @@
+import SwiftUI
+import SwiftOpenAI
+
+struct ContentView: View {
+    @State private var questionText: String = ""
+    @State private var answer: String = ""
+    @State private var isSpinning = false
+    @State private var messages: [MessageChatGPT] = []
+    
+    var openAI = SwiftOpenAI(apiKey: "Your openAI key here")
+    
+    private func listModels() async{
+        do {
+            let modelList = try await openAI.listModels()
+            print(modelList ?? "No models")
+        } catch {
+            print("Error: \(error)")
+        }
+    }
+    
+    private func performSearch() async {
+        let optionalParameters = ChatCompletionsOptionalParameters(temperature: 0.7, maxTokens: 500)
+
+        // Create a message array and include the user's question
+        messages.append(MessageChatGPT(text: questionText, role: .user))
+        
+        do {
+            let chatCompletions = try await openAI.createChatCompletions(model: .gpt4(.base), messages: messages, optionalParameters: optionalParameters)
+            print(chatCompletions ?? "")
+            answer = chatCompletions?.choices.first?.message.content ?? ""
+        } catch {
+            print("Error: \(error)")
+        }
+        isSpinning = false
+        questionText = ""
+    }
+
+    var body: some View {
+        ScrollView {
+            HStack{
+                TextField("Ask question...", text: $questionText)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(of: .text) {
+                        isSpinning = true
+                        Task {
+                            await performSearch()
+                        }
+                    }
+                
+                Button{
+                    isSpinning = true
+                    Task {
+                        await performSearch()
+                        await listModels()
+                    }
+                } label: {
+                    Image(systemName: "paperplane.circle.fill")
+                        .font(.title)
+                        .rotationEffect(Angle(degrees: 45))
+                }.buttonStyle(.borderless)
+            }
+            Text(answer)
+        }
+        .padding()
+        .overlay(alignment: .center) {
+            if isSpinning { ProgressView() }
+        }
+    }
+}
+
+
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+    }
+}
